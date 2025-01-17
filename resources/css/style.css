@@ -1,0 +1,33 @@
+.hBox {
+    -fx-border-width: 20px;
+    -fx-border-color: white;
+    -fx-background-color: orange;
+}
+
+Button {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+Label {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+TextField {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #e32929;
+}
+
+TextArea {
+    -fx-font-size: 20px;
+    -fx-font-family: Consolas;
+    -fx-font-weight: bold;
+    -fx-text-fill: #e32929;
+}
+
+Slider .thumb {
+    -fx-background-color: white;
+}
+

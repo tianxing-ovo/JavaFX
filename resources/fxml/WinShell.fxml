@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.collections.FXCollections?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import java.lang.*?>
+<VBox xmlns:fx="http://javafx.com/fxml/1" fx:id="root" fx:controller="controller.WinShellController"
+      stylesheets="/css/style.css" alignment="TOP_CENTER" onKeyPressed="#onKeyPressed">
+    <Label text="输入命令"/>
+    <Region prefHeight="20"/>
+    <TextField fx:id="textField"/>
+    <Region prefHeight="20"/>
+    <Button text="执行" onMouseClicked="#onMouseClicked"/>
+    <Region prefHeight="20"/>
+    <ChoiceBox fx:id="choiceBox" value="ipconfig" onAction="#onAction">
+        <items>
+            <FXCollections fx:factory="observableArrayList">
+                <String fx:value="dir"/>
+                <String fx:value="ipconfig"/>
+                <String fx:value="ping www.baidu.com"/>
+                <String fx:value="tasklist"/>
+                <String fx:value="tasklist | findstr java"/>
+                <String fx:value="netstat -ano | findstr &quot;\&lt;80\&gt;&quot;"/>
+                <String fx:value="wmic memphysical get maxcapacity"/>
+            </FXCollections>
+        </items>
+    </ChoiceBox>
+    <Region prefHeight="20"/>
+    <TextArea fx:id="textArea" prefHeight="600"/>
+</VBox>
