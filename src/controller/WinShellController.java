@@ -8,10 +8,7 @@ import javafx.util.converter.DefaultStringConverter;
 import util.RuntimeUtil;
 
 import java.io.File;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
+import java.util.*;
 
 /**
  * WinShell控制器
@@ -90,7 +87,30 @@ public class WinShellController {
      * 监听下拉框选中事件
      */
     public void onAction() {
-        textField.setText(prefix + choiceBox.getValue());
+        String value = choiceBox.getValue();
+        if (value.contains("[PID]")) {
+            // 创建文本输入对话框
+            TextInputDialog dialog = new TextInputDialog();
+            dialog.setTitle("进程终止");
+            dialog.setHeaderText("请输入要终止的进程ID");
+            dialog.setContentText("PID");
+            dialog.initOwner(root.getScene().getWindow());
+            // 显示对话框并等待结果
+            Optional<String> result = dialog.showAndWait();
+            // 如果pid存在
+            if (result.isPresent()) {
+                String pid = result.get().trim();
+                String replaceValue = value.replace("[PID]", pid);
+                textField.setText(prefix + replaceValue);
+                if (!pid.isEmpty()) {
+                    execute();
+                }
+            } else {
+                textField.setText(prefix + value);
+            }
+            return;
+        }
+        textField.setText(prefix + value);
         execute();
     }
 

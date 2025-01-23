@@ -20,6 +20,7 @@
                     <String fx:value="tasklist"/>
                     <String fx:value="tasklist | findstr java"/>
                     <String fx:value="netstat -ano | findstr &quot;\&lt;80\&gt;&quot;"/>
+                    <String fx:value="taskkill /F /PID [PID]"/>
                     <String fx:value="wmic memphysical get maxcapacity"/>
                 </FXCollections>
             </items>
