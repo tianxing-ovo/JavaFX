@@ -37,8 +37,13 @@ public class RuntimeUtil {
                 BufferedReader errorReader = new BufferedReader(new InputStreamReader(errorStream, GBK));
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    String finalLine = line;
-                    Platform.runLater(() -> textArea.appendText(finalLine.trim().toLowerCase(Locale.ROOT) + "\n"));
+                    String replaceLine;
+                    if (line.contains("\\")) {
+                        replaceLine = line.replace("\\", "/");
+                    } else {
+                        replaceLine = line.trim().toLowerCase(Locale.ROOT);
+                    }
+                    Platform.runLater(() -> textArea.appendText(replaceLine + "\n"));
                 }
                 while ((line = errorReader.readLine()) != null) {
                     String finalLine = line;
