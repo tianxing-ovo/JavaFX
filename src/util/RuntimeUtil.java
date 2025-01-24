@@ -7,6 +7,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.Locale;
 
 /**
  * 执行CMD命令工具类
@@ -37,11 +38,11 @@ public class RuntimeUtil {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     String finalLine = line;
-                    Platform.runLater(() -> textArea.appendText(finalLine.trim() + "\n"));
+                    Platform.runLater(() -> textArea.appendText(finalLine.trim().toLowerCase(Locale.ROOT) + "\n"));
                 }
                 while ((line = errorReader.readLine()) != null) {
                     String finalLine = line;
-                    Platform.runLater(() -> textArea.appendText(finalLine.trim() + "\n"));
+                    Platform.runLater(() -> textArea.appendText(finalLine.trim().toLowerCase(Locale.ROOT) + "\n"));
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);

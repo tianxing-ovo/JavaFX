@@ -1,9 +1,14 @@
 package controller;
 
+import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 import javafx.util.converter.DefaultStringConverter;
 import util.RuntimeUtil;
 
@@ -28,6 +33,7 @@ public class WinShellController {
     public TextField searchTextField;
     private int lastSearchIndex = -1;
     private String lastSearchText = "";
+    private FilteredList<String> filteredList;
 
     /**
      * 初始化方法(由FXML加载器自动调用)
@@ -41,8 +47,54 @@ public class WinShellController {
         textField.setFocusTraversable(false);
         // 添加文件名到ListView中
         addFileName();
+        ObservableList<String> observableList = listView.getItems();
+        filteredList = new FilteredList<>(observableList, p -> true);
+        listView.setItems(filteredList);
+        // 设置ListView的单元格工厂
+        listView.setCellFactory(param -> new HighlightListCell());
+        // 添加选择框监听器
+        addChoiceBoxListener();
         // 执行CMD命令
         execute();
+    }
+
+    private void addChoiceBoxListener() {
+        // 添加下拉框关闭监听器
+        choiceBox.showingProperty().addListener((obs, oldVal, newVal) -> {
+            if (!newVal) {
+                String value = choiceBox.getValue();
+                choiceBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+                    if (newValue.endsWith(JAR_SUFFIX)) {
+                        newValue = "java -jar " + newValue;
+                    }
+                    textField.setText(prefix + newValue);
+                });
+                if (value.contains("[PID]")) {
+                    // 创建文本输入对话框
+                    TextInputDialog dialog = new TextInputDialog();
+                    dialog.setTitle("进程终止");
+                    dialog.setHeaderText("请输入要终止的进程ID");
+                    dialog.setContentText("PID");
+                    dialog.initOwner(root.getScene().getWindow());
+                    // 显示对话框并等待结果
+                    Optional<String> result = dialog.showAndWait();
+                    // 如果pid存在
+                    if (result.isPresent()) {
+                        String pid = result.get().trim();
+                        String replaceValue = value.replace("[PID]", pid);
+                        textField.setText(prefix + replaceValue);
+                        if (!pid.isEmpty()) {
+                            execute();
+                        }
+                    } else {
+                        textField.setText(prefix + value);
+                    }
+                    return;
+                }
+                textField.setText(prefix + value);
+                execute();
+            }
+        });
     }
 
     private void addFileName() {
@@ -83,37 +135,6 @@ public class WinShellController {
         }
     }
 
-    /**
-     * 监听下拉框选中事件
-     */
-    public void onAction() {
-        String value = choiceBox.getValue();
-        if (value.contains("[PID]")) {
-            // 创建文本输入对话框
-            TextInputDialog dialog = new TextInputDialog();
-            dialog.setTitle("进程终止");
-            dialog.setHeaderText("请输入要终止的进程ID");
-            dialog.setContentText("PID");
-            dialog.initOwner(root.getScene().getWindow());
-            // 显示对话框并等待结果
-            Optional<String> result = dialog.showAndWait();
-            // 如果pid存在
-            if (result.isPresent()) {
-                String pid = result.get().trim();
-                String replaceValue = value.replace("[PID]", pid);
-                textField.setText(prefix + replaceValue);
-                if (!pid.isEmpty()) {
-                    execute();
-                }
-            } else {
-                textField.setText(prefix + value);
-            }
-            return;
-        }
-        textField.setText(prefix + value);
-        execute();
-    }
-
     private void setTextFormatter() {
         textField.setTextFormatter(new TextFormatter<>(new DefaultStringConverter(), prefix, change -> {
             // 获取当前文本
@@ -150,6 +171,10 @@ public class WinShellController {
             lastSearchText = "";
             // 滚动到顶部
             textArea.setScrollTop(0);
+            listView.scrollTo(0);
+            filteredList.setPredicate(p -> true);
+            listView.refresh();
+            listView.getSelectionModel().clearSelection();
             return;
         }
         // 如果搜索文本改变 -> 重置搜索位置
@@ -159,6 +184,15 @@ public class WinShellController {
         }
         String lowerContent = content.toLowerCase();
         String lowerSearchText = searchText.toLowerCase();
+        // 过滤器设置为搜索文本
+        filteredList.setPredicate(item -> item.toLowerCase().contains(lowerSearchText));
+        // 刷新ListView以应用高亮
+        listView.refresh();
+        // 如果有匹配项 -> 滚动到第一个匹配项
+        if (!filteredList.isEmpty()) {
+            listView.scrollTo(0);
+            listView.getSelectionModel().select(0);
+        }
         // 尝试搜索下一个匹配项
         int searchIndex = findNextMatch(content, lowerContent, searchText, lowerSearchText, lastSearchIndex + 1);
         // 如果没找到 -> 从头开始搜索
@@ -208,5 +242,38 @@ public class WinShellController {
             startIndex = searchIndex + 1;
         }
         return -1;
+    }
+
+    private class HighlightListCell extends ListCell<String> {
+        private final TextFlow textFlow = new TextFlow();
+
+        @Override
+        protected void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty || item == null) {
+                setGraphic(null);
+            } else {
+                String searchText = searchTextField.getText().trim().toLowerCase();
+                if (searchText.isEmpty()) {
+                    // 无搜索词时正常显示
+                    textFlow.getChildren().setAll(new Text(item));
+                } else {
+                    // 处理高亮逻辑
+                    String lowerItem = item.toLowerCase();
+                    int startIndex = lowerItem.indexOf(searchText);
+                    if (startIndex != -1) {
+                        // 分割文本: 匹配部分高亮为红色
+                        Text before = new Text(item.substring(0, startIndex));
+                        Text highlight = new Text(item.substring(startIndex, startIndex + searchText.length()));
+                        Text after = new Text(item.substring(startIndex + searchText.length()));
+                        highlight.setFill(Color.RED);
+                        textFlow.getChildren().setAll(before, highlight, after);
+                    } else {
+                        textFlow.getChildren().setAll(new Text(item));
+                    }
+                }
+                setGraphic(textFlow);
+            }
+        }
     }
 }

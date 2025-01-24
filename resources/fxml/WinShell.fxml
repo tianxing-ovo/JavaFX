@@ -10,9 +10,10 @@
     <TextField fx:id="textField"/>
     <HBox spacing="20">
         <TextField fx:id="searchTextField" promptText="输入搜索内容" onKeyReleased="#search"/>
-        <ChoiceBox fx:id="choiceBox" value="ipconfig" onAction="#onAction">
+        <ChoiceBox fx:id="choiceBox" value="help">
             <items>
                 <FXCollections fx:factory="observableArrayList">
+                    <String fx:value="help"/>
                     <String fx:value="dir"/>
                     <String fx:value="ipconfig"/>
                     <String fx:value="ping www.baidu.com"/>
