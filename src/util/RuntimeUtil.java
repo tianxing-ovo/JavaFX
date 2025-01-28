@@ -40,8 +40,10 @@ public class RuntimeUtil {
                     String replaceLine;
                     if (line.contains("\\")) {
                         replaceLine = line.replace("\\", "/");
-                    } else {
+                    } else if ("help".equalsIgnoreCase(command)) {
                         replaceLine = line.trim().toLowerCase(Locale.ROOT);
+                    } else {
+                        replaceLine = line.trim();
                     }
                     Platform.runLater(() -> textArea.appendText(replaceLine + "\n"));
                 }

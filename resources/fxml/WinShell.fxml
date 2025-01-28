@@ -13,14 +13,15 @@
         <ChoiceBox fx:id="choiceBox" value="help">
             <items>
                 <FXCollections fx:factory="observableArrayList">
-                    <String fx:value="help"/>
                     <String fx:value="dir"/>
+                    <String fx:value="help"/>
                     <String fx:value="ipconfig"/>
+                    <String fx:value="java -XX:+PrintFlagsFinal -version"/>
+                    <String fx:value="netstat -ano | findstr &quot;\&lt;80\&gt;&quot;"/>
                     <String fx:value="ping www.baidu.com"/>
                     <String fx:value="sc query RabbitMQ"/>
                     <String fx:value="tasklist"/>
                     <String fx:value="tasklist | findstr java"/>
-                    <String fx:value="netstat -ano | findstr &quot;\&lt;80\&gt;&quot;"/>
                     <String fx:value="taskkill /F /PID [PID]"/>
                     <String fx:value="wmic memphysical get maxcapacity"/>
                     <String fx:value="where git"/>
