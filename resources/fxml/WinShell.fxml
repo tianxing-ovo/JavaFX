@@ -7,7 +7,12 @@
 <VBox xmlns:fx="http://javafx.com/fxml/1" fx:id="root" fx:controller="controller.WinShellController"
       stylesheets="/css/style.css" alignment="TOP_CENTER" spacing="10" onKeyPressed="#onKeyPressed">
     <Label text="输入命令"/>
-    <TextField fx:id="textField"/>
+    <HBox spacing="10">
+        <TextField fx:id="textField" prefWidth="800"/>
+        <Button text="复制" onMouseClicked="#copy"/>
+        <Button text="清空" onMouseClicked="#clear"/>
+        <Button text="执行" onMouseClicked="#execute"/>
+    </HBox>
     <HBox spacing="20">
         <TextField fx:id="searchTextField" promptText="输入搜索内容" onKeyReleased="#search"/>
         <ChoiceBox fx:id="choiceBox" value="help">

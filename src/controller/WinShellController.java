@@ -1,14 +1,18 @@
 package controller;
 
+import javafx.animation.PauseTransition;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.scene.control.*;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
+import javafx.util.Duration;
 import javafx.util.converter.DefaultStringConverter;
 import util.RuntimeUtil;
 
@@ -118,10 +122,39 @@ public class WinShellController {
      * 执行CMD命令
      */
     public void execute() {
-        // 清空文本域
+        // 清空输出文本域
         textArea.clear();
         // 执行CMD命令
         RuntimeUtil.exec(textField.getText().substring(prefix.length()), textArea);
+    }
+
+    /**
+     * 清空输入文本框
+     */
+    public void clear() {
+        textField.setText(prefix);
+    }
+
+    /**
+     * 复制输入文本框
+     */
+    public void copy() {
+        // 复制输入文本框内容到剪贴板
+        Clipboard clipboard = Clipboard.getSystemClipboard();
+        ClipboardContent clipboardContent = new ClipboardContent();
+        clipboardContent.putString(textField.getText().substring(prefix.length()));
+        clipboard.setContent(clipboardContent);
+        // 弹出提示框
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("提示");
+        alert.setHeaderText(null);
+        alert.setContentText("复制成功");
+        alert.initOwner(root.getScene().getWindow());
+        alert.show();
+        // 500ms后关闭提示框
+        PauseTransition pauseTransition = new PauseTransition(Duration.millis(500));
+        pauseTransition.setOnFinished(event -> alert.close());
+        pauseTransition.play();
     }
 
     /**
