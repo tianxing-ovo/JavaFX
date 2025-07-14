@@ -12,6 +12,7 @@
         <Button text="复制" onMouseClicked="#copy"/>
         <Button text="清空" onMouseClicked="#clear"/>
         <Button text="执行" onMouseClicked="#execute"/>
+        <Button text="滚动到底部" onMouseClicked="#scrollToBottom"/>
     </HBox>
     <HBox spacing="20">
         <TextField fx:id="searchTextField" promptText="输入搜索内容" onKeyReleased="#search"/>

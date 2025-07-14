@@ -168,6 +168,13 @@ public class WinShellController {
         }
     }
 
+    /**
+     * 文本域滚动到底部
+     */
+    public void scrollToBottom() {
+        textArea.setScrollTop(Double.MAX_VALUE);
+    }
+
     private void setTextFormatter() {
         textField.setTextFormatter(new TextFormatter<>(new DefaultStringConverter(), prefix, change -> {
             // 获取当前文本
