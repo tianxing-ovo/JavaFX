@@ -3,10 +3,7 @@ package util;
 import javafx.application.Platform;
 import javafx.scene.control.TextArea;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.util.Locale;
 
 /**
@@ -14,27 +11,31 @@ import java.util.Locale;
  *
  * @author tianxing
  */
-public class RuntimeUtil {
-
-    private static final String GBK = "GBK";
+public class ProcessBuilderUtil {
 
     /**
      * 执行CMD命令并将输出结果添加到文本区域中
      *
-     * @param command  命令
-     * @param textArea 文本区域
+     * @param command    命令
+     * @param textArea   文本区域
+     * @param charset    字符集
+     * @param onComplete 回调方法
      */
-    public static void exec(String command, TextArea textArea) {
+    public static void exec(String command, TextArea textArea, String charset, Runnable onComplete) {
         String[] cmdarray = {"cmd", "/c", command};
         new Thread(() -> {
             try {
-                Process process = Runtime.getRuntime().exec(cmdarray);
-                // 获取输入流
+                ProcessBuilder processBuilder = new ProcessBuilder();
+                processBuilder.command(cmdarray);
+                // 设置工作目录为当前项目根目录
+                processBuilder.directory(new File(System.getProperty("user.dir")));
+                // 合并标准输出和错误输出
+                processBuilder.redirectErrorStream(true);
+                // 启动进程
+                Process process = processBuilder.start();
+                // 获取输入流(包含标准输出和错误输出)
                 InputStream inputStream = process.getInputStream();
-                // 获取错误输入流
-                InputStream errorStream = process.getErrorStream();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, GBK));
-                BufferedReader errorReader = new BufferedReader(new InputStreamReader(errorStream, GBK));
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, charset));
                 String line;
                 while ((line = reader.readLine()) != null) {
                     String replaceLine;
@@ -47,10 +48,7 @@ public class RuntimeUtil {
                     }
                     Platform.runLater(() -> textArea.appendText(replaceLine + "\n"));
                 }
-                while ((line = errorReader.readLine()) != null) {
-                    String finalLine = line;
-                    Platform.runLater(() -> textArea.appendText(finalLine.trim().toLowerCase(Locale.ROOT) + "\n"));
-                }
+                Platform.runLater(onComplete);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

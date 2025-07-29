@@ -3,6 +3,7 @@ package controller;
 import javafx.animation.PauseTransition;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
+import javafx.event.ActionEvent;
 import javafx.scene.control.*;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -14,7 +15,7 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
 import javafx.util.converter.DefaultStringConverter;
-import util.RuntimeUtil;
+import util.ProcessBuilderUtil;
 
 import java.io.File;
 import java.util.*;
@@ -29,15 +30,18 @@ public class WinShellController {
     private static final String JAR_SUFFIX = ".jar";
     private final String path = System.getProperty("user.dir");
     private final String prefix = path + ">";
+    private final List<String> tabCompletionCandidates = new ArrayList<>();
     public VBox root;
     public TextField textField;
     public TextArea textArea;
-    public ChoiceBox<String> choiceBox;
     public ListView<String> listView;
     public TextField searchTextField;
+    public Button previousMatchButton;
+    public Button nextMatchButton;
     private int lastSearchIndex = -1;
-    private String lastSearchText = "";
     private FilteredList<String> filteredList;
+    private int tabCompletionIndex = -1;
+    private PauseTransition searchDebounce;
 
     /**
      * 初始化方法(由FXML加载器自动调用)
@@ -45,8 +49,6 @@ public class WinShellController {
     public void initialize() {
         // 设置文本格式化器
         setTextFormatter();
-        // 文本框设置默认值
-        textField.setText(prefix + choiceBox.getValue());
         // 取消焦点 -> 避免输入框文本被全选
         textField.setFocusTraversable(false);
         // 添加文件名到ListView中
@@ -56,55 +58,23 @@ public class WinShellController {
         listView.setItems(filteredList);
         // 设置ListView的单元格工厂
         listView.setCellFactory(param -> new HighlightListCell());
-        // 添加选择框监听器
-        addChoiceBoxListener();
-        // 执行CMD命令
-        execute();
+        // 初始化时禁用按钮
+        updateMatchButtonsState();
+        // 初始化防抖定时器
+        initDebounce();
     }
 
-    private void addChoiceBoxListener() {
-        // 添加下拉框关闭监听器
-        choiceBox.showingProperty().addListener((obs, oldVal, newVal) -> {
-            if (!newVal) {
-                String value = choiceBox.getValue();
-                choiceBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-                    if (newValue.endsWith(JAR_SUFFIX)) {
-                        newValue = "java -jar " + newValue;
-                    }
-                    textField.setText(prefix + newValue);
-                });
-                if (value.contains("[PID]")) {
-                    // 创建文本输入对话框
-                    TextInputDialog dialog = new TextInputDialog();
-                    dialog.setTitle("进程终止");
-                    dialog.setHeaderText("请输入要终止的进程ID");
-                    dialog.setContentText("PID");
-                    dialog.initOwner(root.getScene().getWindow());
-                    // 显示对话框并等待结果
-                    Optional<String> result = dialog.showAndWait();
-                    // 如果pid存在
-                    if (result.isPresent()) {
-                        String pid = result.get().trim();
-                        String replaceValue = value.replace("[PID]", pid);
-                        textField.setText(prefix + replaceValue);
-                        if (!pid.isEmpty()) {
-                            execute();
-                        }
-                    } else {
-                        textField.setText(prefix + value);
-                    }
-                    return;
-                }
-                textField.setText(prefix + value);
-                execute();
-            }
-        });
+    private void initDebounce() {
+        // 300ms延迟
+        searchDebounce = new PauseTransition(Duration.millis(300));
+        // 延迟结束后执行搜索
+        searchDebounce.setOnFinished(event -> search());
     }
 
     private void addFileName() {
         File file = new File(path);
         File[] files = file.listFiles();
-        List<String> suffixList = Arrays.asList(".bat", ".exe", ".jar");
+        List<String> suffixList = Arrays.asList(".apk", ".bat", ".exe", ".jar");
         for (File f : Objects.requireNonNull(files)) {
             String filename = f.getName();
             int lastDotIndex = filename.lastIndexOf(".");
@@ -119,13 +89,51 @@ public class WinShellController {
     }
 
     /**
+     * 统计搜索文本在内容中的匹配次数
+     *
+     * @param content    内容
+     * @param searchText 搜索文本
+     * @return 匹配次数
+     */
+    private int countMatches(String content, String searchText) {
+        if (content.isEmpty() || searchText.isEmpty()) {
+            return 0;
+        }
+        String lowerContent = content.toLowerCase();
+        String lowerSearchText = searchText.toLowerCase();
+        int count = 0;
+        int fromIndex = 0;
+        int searchLength = lowerSearchText.length();
+        // 循环查找所有非重叠匹配
+        while ((fromIndex = lowerContent.indexOf(lowerSearchText, fromIndex)) != -1) {
+            count++;
+            // 开始索引移动到当前匹配项之后
+            fromIndex += searchLength;
+        }
+        return count;
+    }
+
+    /**
      * 执行CMD命令
      */
     public void execute() {
         // 清空输出文本域
         textArea.clear();
+        String command = textField.getText().substring(prefix.length());
+        String charset = "GBK";
+        if (command.isEmpty()) {
+            return;
+        }
+        if (command.contains("apktool")) {
+            charset = "UTF-8";
+        }
         // 执行CMD命令
-        RuntimeUtil.exec(textField.getText().substring(prefix.length()), textArea);
+        ProcessBuilderUtil.exec(command, textArea, charset, () -> {
+            // 若搜索框有内容自动触发搜索
+            if (!searchTextField.getText().isEmpty()) {
+                search();
+            }
+        });
     }
 
     /**
@@ -190,46 +198,59 @@ public class WinShellController {
 
     public void onMouseClicked() {
         String item = listView.getSelectionModel().getSelectedItem();
+        if (item == null || item.isEmpty()) {
+            return;
+        }
         if (item.endsWith(JAR_SUFFIX)) {
             item = "java -jar " + item;
         }
         textField.setText(prefix + item);
     }
 
+    private void clearHighlight() {
+        textArea.setStyle("");
+        // 清除选中状态
+        textArea.deselect();
+        lastSearchIndex = -1;
+        // 滚动到顶部
+        textArea.setScrollTop(0);
+        listView.scrollTo(0);
+        filteredList.setPredicate(p -> true);
+        listView.refresh();
+        listView.getSelectionModel().clearSelection();
+        // 更新按钮状态
+        updateMatchButtonsState();
+    }
+
+    public void onSearchInputChanged() {
+        // 重置定时器
+        searchDebounce.playFromStart();
+    }
+
     /**
      * 搜索文本并高亮显示
      */
     public void search() {
+        // 获取搜索框内容
         String searchText = searchTextField.getText();
+        // 获取文本域内容
         String content = textArea.getText();
-        // 如果搜索文本为空 -> 清除高亮并返回
+        // 如果搜索文本为空
         if (searchText.isEmpty()) {
-            textArea.setStyle("");
-            // 清除选中状态
-            textArea.deselect();
-            lastSearchIndex = -1;
-            lastSearchText = "";
-            // 滚动到顶部
-            textArea.setScrollTop(0);
-            listView.scrollTo(0);
-            filteredList.setPredicate(p -> true);
-            listView.refresh();
-            listView.getSelectionModel().clearSelection();
+            // 清除高亮并返回顶部
+            clearHighlight();
             return;
         }
-        // 如果搜索文本改变 -> 重置搜索位置
-        if (!searchText.equals(lastSearchText)) {
-            lastSearchIndex = -1;
-            lastSearchText = searchText;
-        }
+        lastSearchIndex = -1;
         String lowerContent = content.toLowerCase();
         String lowerSearchText = searchText.toLowerCase();
         // 过滤器设置为搜索文本
         filteredList.setPredicate(item -> item.toLowerCase().contains(lowerSearchText));
         // 刷新ListView以应用高亮
         listView.refresh();
-        // 如果有匹配项 -> 滚动到第一个匹配项
+        // 如果有匹配项
         if (!filteredList.isEmpty()) {
+            // 滚动到第一个匹配项
             listView.scrollTo(0);
             listView.getSelectionModel().select(0);
         }
@@ -255,17 +276,57 @@ public class WinShellController {
             // 如果没有找到匹配项，清除选中状态
             textArea.deselect();
         }
+        // 更新按钮状态
+        updateMatchButtonsState();
+    }
+
+    /**
+     * 滚动到匹配项所在行
+     *
+     * @param searchIndex 匹配项的索引
+     */
+    private void scrollToMatch(int searchIndex) {
+        double lineHeight = textArea.getFont().getSize() * 1.5;
+        int lineNumber = textArea.getText().substring(0, searchIndex).split("\n").length - 1;
+        textArea.setScrollTop(lineHeight * lineNumber);
+    }
+
+    /**
+     * 查找上一个匹配项
+     *
+     * @param content         内容
+     * @param lowerContent    小写内容
+     * @param searchText      搜索文本
+     * @param lowerSearchText 小写搜索文本
+     * @param startIndex      起始索引
+     * @return 上一个匹配项的索引
+     */
+    private int findPreviousMatch(String content, String lowerContent, String searchText, String lowerSearchText,
+                                  int startIndex) {
+        while (startIndex >= 0) {
+            int searchIndex = lowerContent.lastIndexOf(lowerSearchText, startIndex);
+            if (searchIndex == -1) {
+                return -1;
+            }
+            // 验证是否为完整匹配
+            String actualMatch = content.substring(searchIndex, searchIndex + searchText.length());
+            if (actualMatch.toLowerCase().equals(lowerSearchText)) {
+                return searchIndex;
+            }
+            startIndex = searchIndex - 1;
+        }
+        return -1;
     }
 
     /**
      * 查找下一个匹配项
      *
-     * @param content         原始文本内容
-     * @param lowerContent    小写的文本内容
+     * @param content         内容
+     * @param lowerContent    小写内容
      * @param searchText      搜索文本
-     * @param lowerSearchText 小写的搜索文本
-     * @param startIndex      开始搜索的位置
-     * @return 匹配位置 -> 如果没找到返回-1
+     * @param lowerSearchText 小写搜索文本
+     * @param startIndex      起始索引
+     * @return 下一个匹配项的索引
      */
     private int findNextMatch(String content, String lowerContent, String searchText, String lowerSearchText,
                               int startIndex) {
@@ -282,6 +343,141 @@ public class WinShellController {
             startIndex = searchIndex + 1;
         }
         return -1;
+    }
+
+    /**
+     * 更新匹配按钮状态
+     */
+    private void updateMatchButtonsState() {
+        String searchText = searchTextField.getText();
+        String content = textArea.getText();
+        boolean hasMatches;
+        // 匹配项数量
+        int matchCount = 0;
+        if (!searchText.isEmpty() && !content.isEmpty()) {
+            String lowerContent = content.toLowerCase();
+            String lowerSearchText = searchText.toLowerCase();
+            hasMatches = lowerContent.contains(lowerSearchText);
+            if (hasMatches) {
+                matchCount = countMatches(content, searchText);
+            }
+        }
+        // 匹配项数量<=1时禁用按钮
+        boolean buttonDisable = matchCount <= 1;
+        previousMatchButton.setDisable(buttonDisable);
+        nextMatchButton.setDisable(buttonDisable);
+    }
+
+    /**
+     * 处理菜单项点击事件
+     *
+     * @param actionEvent 动作事件
+     */
+    public void handleMenuItemClick(ActionEvent actionEvent) {
+        MenuItem menuItem = (MenuItem) actionEvent.getSource();
+        String text = menuItem.getText();
+        if (text.contains("[PID]")) {
+            // 创建文本输入对话框
+            TextInputDialog dialog = new TextInputDialog();
+            dialog.setTitle("进程终止");
+            dialog.setHeaderText("请输入要终止的进程ID");
+            dialog.setContentText("PID");
+            dialog.initOwner(root.getScene().getWindow());
+            // 显示对话框并等待结果
+            Optional<String> result = dialog.showAndWait();
+            // 如果pid存在
+            if (result.isPresent()) {
+                String pid = result.get().trim();
+                String replaceValue = text.replace("[PID]", pid);
+                textField.setText(prefix + replaceValue);
+                if (!pid.isEmpty()) {
+                    execute();
+                }
+            } else {
+                textField.setText(prefix + text);
+            }
+            return;
+        }
+        textField.setText(prefix + text);
+        for (String item : Arrays.asList("apktool", "install", "uninstall", "packages")) {
+            if (text.contains(item)) {
+                return;
+            }
+        }
+        execute();
+    }
+
+    public void previousMatch() {
+        String searchText = searchTextField.getText();
+        String content = textArea.getText();
+        if (searchText.isEmpty() || content.isEmpty()) {
+            return;
+        }
+        String lowerContent = content.toLowerCase();
+        String lowerSearchText = searchText.toLowerCase();
+        int searchIndex = findPreviousMatch(content, lowerContent, searchText, lowerSearchText, lastSearchIndex - 1);
+        // 如果没找到 -> 从末尾开始搜索
+        if (searchIndex == -1) {
+            searchIndex = findPreviousMatch(content, lowerContent, searchText, lowerSearchText, content.length());
+        }
+        // 如果找到了匹配文本
+        if (searchIndex != -1) {
+            lastSearchIndex = searchIndex;
+            textArea.selectRange(searchIndex, searchIndex + searchText.length());
+            scrollToMatch(searchIndex);
+            searchTextField.requestFocus();
+        }
+    }
+
+    public void nextMatch() {
+        String searchText = searchTextField.getText();
+        String content = textArea.getText();
+        if (searchText.isEmpty() || content.isEmpty()) {
+            return;
+        }
+        String lowerContent = content.toLowerCase();
+        String lowerSearchText = searchText.toLowerCase();
+        int searchIndex = findNextMatch(content, lowerContent, searchText, lowerSearchText, lastSearchIndex + 1);
+        // 如果没找到 -> 从头开始搜索
+        if (searchIndex == -1) {
+            searchIndex = findNextMatch(content, lowerContent, searchText, lowerSearchText, 0);
+        }
+        // 如果找到了匹配文本
+        if (searchIndex != -1) {
+            lastSearchIndex = searchIndex;
+            textArea.selectRange(searchIndex, searchIndex + searchText.length());
+            scrollToMatch(searchIndex);
+            searchTextField.requestFocus();
+        }
+    }
+
+    public void tabCompletion(KeyEvent keyEvent) {
+        if (keyEvent.getCode() == KeyCode.TAB) {
+            if (tabCompletionIndex == -1) {
+                String input = textField.getText().substring(prefix.length()).trim();
+                tabCompletionCandidates.clear();
+                if (!input.isEmpty()) {
+                    for (String item : listView.getItems()) {
+                        if (item.startsWith(input)) {
+                            tabCompletionCandidates.add(item);
+                        }
+                    }
+                }
+            }
+            if (!tabCompletionCandidates.isEmpty()) {
+                tabCompletionIndex = (tabCompletionIndex + 1) % tabCompletionCandidates.size();
+                String candidate = tabCompletionCandidates.get(tabCompletionIndex);
+                String value = candidate;
+                if (candidate.endsWith(JAR_SUFFIX)) {
+                    value = "java -jar " + candidate;
+                }
+                textField.setText(prefix + value);
+                textField.positionCaret(textField.getText().length());
+            }
+            keyEvent.consume();
+        } else {
+            tabCompletionIndex = -1;
+        }
     }
 
     private class HighlightListCell extends ListCell<String> {
